@@ -63,7 +63,7 @@ li button{border:0;background:none;color:var(--muted);font-size:18px;line-height
     <button class="btn" id="ptog" aria-expanded="true">Panel</button>
     <button class="btn primary" id="open">Open file</button>
   </div>
-  <input id="file" type="file" hidden accept=".stl,.obj,.step,.stp,.iges,.igs,.catpart,.catproduct">
+  <input id="file" type="file" hidden>
 </header>
 
 <nav class="tools" aria-label="Tools">
@@ -90,6 +90,7 @@ li button{border:0;background:none;color:var(--muted);font-size:18px;line-height
     <div id="empty">
       <h2>Drop a 3D file here</h2>
       <p>STL, OBJ, STEP and IGES open right in your browser. Files stay on your computer and are never uploaded.</p>
+      <button class="btn primary" id="open2">Choose a file</button>
       <button class="btn link" id="sample">Load a sample model</button>
     </div>
     <div id="msg" role="status" hidden title="Tap to dismiss"></div>
@@ -126,6 +127,8 @@ function showMsg(t, err) {
   m.hidden = !t; m.className = err ? 'err' : ''; m.textContent = t || '';
 }
 $('#msg').onclick = () => showMsg('');
+$('#open').onclick = $('#open2').onclick = () => $('#file').click();
+$('#file').onchange = e => { const f = e.target.files[0]; if (f) openFile(f); e.target.value = ''; };
 if (typeof THREE === 'undefined' || !THREE.OrbitControls) {
   showMsg('The 3D library could not be loaded. Check that cdn.jsdelivr.net is reachable from your network.', true);
   throw new Error('three.js missing');
@@ -290,6 +293,10 @@ async function parseCAD(buf, ext) {
   return group;
 }
 async function openFile(file) {
+  if (typeof THREE === 'undefined') {
+    showMsg('The 3D library did not load, so files cannot open. Check that cdn.jsdelivr.net is reachable, and open this page from your computer (not a preview).', true);
+    return;
+  }
   const ext = file.name.split('.').pop().toLowerCase();
   if (['catpart', 'catproduct', 'cgr', '3dxml'].includes(ext)) {
     showMsg('CATIA files (.CATPart, .CATProduct) are proprietary and cannot be read in a browser. In CATIA, choose File > Save As, pick STEP (.stp), then open that file here.', true);
@@ -515,8 +522,6 @@ function setTool(t) {
 }
 document.querySelectorAll('[data-tool]').forEach(b => b.onclick = () => setTool(b.dataset.tool));
 
-$('#open').onclick = () => $('#file').click();
-$('#file').onchange = e => { const f = e.target.files[0]; if (f) openFile(f); e.target.value = ''; };
 $('#sample').onclick = () => showModel(new THREE.Mesh(new THREE.TorusKnotGeometry(10, 3, 220, 32), mat()), 'Sample torus knot', 0, 'obj');
 $('#reset').onclick = fitView;
 $('#clear').onclick = () => { items.slice().forEach(removeItem); pend = []; clearTemp(); hint('Measurements cleared.'); };
