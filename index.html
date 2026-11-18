@@ -5,60 +5,113 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>3D Model Viewer</title>
 <style>
-:root{--bg:#f3f4f6;--panel:#fff;--ink:#1c2430;--muted:#5d6877;--line:#d3d9e1;--accent:#1f5fbf;--on:#fff;--v1:#eef1f5;--v2:#c6cfda;--err:#b42318}
-@media(prefers-color-scheme:dark){:root{--bg:#14181e;--panel:#1d232b;--ink:#e8ecf1;--muted:#9aa5b3;--line:#2d3641;--accent:#6aa5ff;--on:#0b1424;--v1:#2b3441;--v2:#12161c;--err:#ff8a7a}}
+:root{--bg:#f3f4f6;--panel:#fff;--ink:#1c2430;--muted:#5d6877;--line:#d3d9e1;--accent:#1f5fbf;--on:#fff;--v1:#eef1f5;--v2:#c6cfda;--err:#b42318;--ok:#157f3b}
+@media(prefers-color-scheme:dark){:root{--bg:#14181e;--panel:#1d232b;--ink:#e8ecf1;--muted:#9aa5b3;--line:#2d3641;--accent:#6aa5ff;--on:#0b1424;--v1:#2b3441;--v2:#12161c;--err:#ff8a7a;--ok:#5fd68a}}
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
-body{font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink);display:flex;flex-direction:column}
-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
+body{font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;height:100dvh}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--line)}
+header div{display:flex;gap:8px}
 h1{font-size:16px;font-weight:600;margin:0}
-.btn{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 12px;min-height:36px;cursor:pointer}
+h2{font-size:13px;font-weight:600;margin:0 0 6px;color:var(--muted)}
+.btn,select,input{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 11px;min-height:36px}
+.btn{cursor:pointer}
 .btn:hover{border-color:var(--accent)}
 .btn[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--on)}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on);font-weight:600}
 .btn.link{border:0;background:none;color:var(--accent);text-decoration:underline;padding:4px}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-#stage{position:relative;flex:1;min-height:0;overflow:hidden;background:radial-gradient(ellipse at 50% 35%,var(--v1),var(--v2))}
+.tools{display:flex;gap:6px;padding:8px 12px;overflow-x:auto;background:var(--panel);border-bottom:1px solid var(--line)}
+.tools>*{flex:none}
+.sep{width:1px;background:var(--line);margin:0 2px}
+#hint{padding:6px 12px;font-size:13px;color:var(--muted);background:var(--panel);border-bottom:1px solid var(--line);min-height:32px}
+.main{flex:1;display:flex;min-height:0}
+#stage{position:relative;flex:1;min-width:0;overflow:hidden;background:radial-gradient(ellipse at 50% 35%,var(--v1),var(--v2))}
 #stage.drag{box-shadow:inset 0 0 0 3px var(--accent)}
-#stage canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+#stage canvas{display:block;width:100%;height:100%;touch-action:none}
+#labels{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.lab{position:absolute;left:0;top:0;white-space:nowrap;font-size:12px;font-variant-numeric:tabular-nums;background:var(--panel);color:var(--ink);border:1px solid var(--accent);border-radius:4px;padding:2px 6px}
+.lab.fcf{display:flex;padding:0;border-color:var(--ink);border-radius:2px;font-family:"Segoe UI Symbol","Noto Sans Symbols 2","Noto Sans Math","Apple Symbols",system-ui,sans-serif}
+.fcf span{padding:3px 8px;border-left:1px solid var(--ink)}
+.fcf span:first-child{border-left:0;font-size:16px;line-height:1.1}
+.fcf b{padding:3px 8px;color:var(--on)}.fcf b.ok{background:var(--ok)}.fcf b.bad{background:var(--err)}
+.lab.dat{border-color:var(--ink);border-radius:2px;font-weight:700;font-size:14px;padding:1px 8px}
 #empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;gap:6px}
-#empty h2{margin:0;font-size:22px;font-weight:600}
+#empty h2{font-size:22px;color:var(--ink);margin:0}
 #empty p{margin:0;color:var(--muted);max-width:42ch}
-#info,#msg,#bar{position:absolute;background:var(--panel);border:1px solid var(--line);border-radius:8px}
-#info{top:12px;left:12px;padding:10px 12px;max-width:min(300px,calc(100% - 24px));font-size:13px}
-#info b{display:block;font-size:14px;overflow-wrap:anywhere}
-#info span{color:var(--muted)}
-#info dl{margin:6px 0 0;display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-variant-numeric:tabular-nums}
-#info dt{color:var(--muted)}#info dd{margin:0}
-#msg{top:12px;left:50%;transform:translateX(-50%);padding:10px 14px;max-width:min(460px,calc(100% - 24px));border-left:4px solid var(--accent);width:max-content}
+#msg{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:8px;padding:8px 12px;width:max-content;max-width:calc(100% - 20px);cursor:pointer}
 #msg.err{border-left-color:var(--err)}
-#bar{bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:6px;padding:6px;flex-wrap:wrap;justify-content:center;max-width:calc(100% - 24px)}
+aside{width:320px;flex:none;background:var(--panel);border-left:1px solid var(--line);overflow:auto;padding:12px;display:flex;flex-direction:column;gap:14px}
+aside.off{display:none}
+aside label{display:flex;flex-direction:column;gap:2px;font-size:13px;color:var(--muted);margin-bottom:8px}
+aside input,aside select{width:100%;color:var(--ink)}
+dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:13px;font-variant-numeric:tabular-nums}
+dt{color:var(--muted)}dd{margin:0;overflow-wrap:anywhere}
+.row{display:flex;gap:6px;margin-bottom:6px}
+ul{list-style:none;margin:0;padding:0;font-size:13px}
+li{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--line);overflow-wrap:anywhere}
+li button{border:0;background:none;color:var(--muted);font-size:18px;line-height:1;cursor:pointer;padding:0 6px;min-width:32px}
 [hidden]{display:none!important}
-@media(max-width:560px){#info{top:auto;bottom:64px}#msg{top:8px}}
+@media(max-width:800px){.main{flex-direction:column}aside{width:auto;max-height:42%;border-left:0;border-top:1px solid var(--line)}}
+@media(pointer:coarse){.btn,select,input{min-height:42px}}
 </style>
 </head>
 <body>
 <header>
   <h1>3D Model Viewer</h1>
-  <button class="btn primary" id="open">Open file</button>
+  <div>
+    <button class="btn" id="ptog" aria-expanded="true">Panel</button>
+    <button class="btn primary" id="open">Open file</button>
+  </div>
   <input id="file" type="file" hidden accept=".stl,.obj,.step,.stp,.iges,.igs,.catpart,.catproduct">
 </header>
 
-<main id="stage">
-  <div id="empty">
-    <h2>Drop a 3D file here</h2>
-    <p>STL, OBJ, STEP and IGES open right in your browser. Files stay on your computer and are never uploaded.</p>
-    <button class="btn link" id="sample">Load a sample model</button>
-  </div>
-  <div id="info" hidden></div>
-  <div id="msg" role="status" hidden></div>
-  <div id="bar" hidden>
-    <button class="btn" id="reset">Reset view</button>
-    <button class="btn" id="wire" aria-pressed="false">Wireframe</button>
-    <button class="btn" id="grid" aria-pressed="true">Grid</button>
-    <button class="btn" id="spin" aria-pressed="false">Auto-rotate</button>
-  </div>
-</main>
+<nav class="tools" aria-label="Tools">
+  <button class="btn" data-tool="orbit" aria-pressed="true">Orbit</button>
+  <button class="btn" data-tool="distance" aria-pressed="false">Distance</button>
+  <button class="btn" data-tool="angle" aria-pressed="false">Angle</button>
+  <button class="btn" data-tool="radius" aria-pressed="false">Radius</button>
+  <button class="btn" data-tool="face" aria-pressed="false">Face angle</button>
+  <button class="btn" data-tool="gdt" aria-pressed="false">GD&amp;T</button>
+  <span class="sep"></span>
+  <button class="btn" id="reset">Reset view</button>
+  <button class="btn" id="wire" aria-pressed="false">Wireframe</button>
+  <button class="btn" id="grid" aria-pressed="true">Grid</button>
+  <button class="btn" id="spin" aria-pressed="false">Rotate</button>
+  <button class="btn" id="snap" aria-pressed="true">Snap</button>
+  <select id="funit" aria-label="Units the file is in" title="Units the file is in"></select>
+  <select id="unit" aria-label="Show results in" title="Show results in"></select>
+</nav>
+<div id="hint" role="status">Open a file to start.</div>
+
+<div class="main">
+  <main id="stage">
+    <div id="labels"></div>
+    <div id="empty">
+      <h2>Drop a 3D file here</h2>
+      <p>STL, OBJ, STEP and IGES open right in your browser. Files stay on your computer and are never uploaded.</p>
+      <button class="btn link" id="sample">Load a sample model</button>
+    </div>
+    <div id="msg" role="status" hidden title="Tap to dismiss"></div>
+  </main>
+  <aside id="side">
+    <section><h2>Model</h2><div id="model">No model loaded.</div></section>
+    <section id="gdt" hidden>
+      <h2>GD&amp;T frame</h2>
+      <label>Characteristic <select id="gsym"></select></label>
+      <label>Tolerance <input id="gtol" value="0.05" inputmode="decimal"></label>
+      <label>Datums (for example A, B) <input id="gref" placeholder="A, B, C"></label>
+      <label data-for="∠">Nominal angle (°) <input id="gnom" value="45" inputmode="decimal"></label>
+      <label data-for="∥⟂∠">Feature length <input id="glen" inputmode="decimal"></label>
+      <button class="btn" id="gfin" hidden>Finish flatness check</button>
+    </section>
+    <section>
+      <h2>Measurements</h2>
+      <div class="row"><button class="btn" id="copy">Copy list</button><button class="btn" id="clear">Clear all</button></div>
+      <ul id="list"></ul>
+    </section>
+  </aside>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
@@ -66,28 +119,27 @@ h1{font-size:16px;font-weight:600;margin:0}
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/OBJLoader.js"></script>
 <script>
 const $ = s => document.querySelector(s);
-const stage = $('#stage');
-const OCCT = 'https://cdn.jsdelivr.net/npm/occt-import-js@0.0.23/dist/';
+const stage = $('#stage'), OCCT = 'https://cdn.jsdelivr.net/npm/occt-import-js@0.0.23/dist/';
 
-function showMsg(text, err) {
+function showMsg(t, err) {
   const m = $('#msg');
-  m.hidden = !text;
-  m.className = err ? 'err' : '';
-  m.textContent = text || '';
+  m.hidden = !t; m.className = err ? 'err' : ''; m.textContent = t || '';
 }
-
+$('#msg').onclick = () => showMsg('');
 if (typeof THREE === 'undefined' || !THREE.OrbitControls) {
   showMsg('The 3D library could not be loaded. Check that cdn.jsdelivr.net is reachable from your network.', true);
   throw new Error('three.js missing');
 }
+const V3 = THREE.Vector3;
 
 /* ---------- scene ---------- */
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 10000);
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-stage.prepend(renderer.domElement);
-const controls = new THREE.OrbitControls(camera, renderer.domElement);
+const cv = renderer.domElement;
+stage.prepend(cv);
+const controls = new THREE.OrbitControls(camera, cv);
 controls.enableDamping = true;
 controls.autoRotateSpeed = 2;
 scene.add(camera, new THREE.HemisphereLight(0xffffff, 0x667788, 0.9));
@@ -95,10 +147,11 @@ const headlight = new THREE.DirectionalLight(0xffffff, 0.9);
 headlight.position.set(0.5, 1, 1);
 camera.add(headlight);
 
-const holder = new THREE.Group();
-scene.add(holder);
-let grid = null, mats = [], wf = false, gridOn = true;
-const size = new THREE.Vector3();
+const holder = new THREE.Group(), marks = new THREE.Group(), tmp = new THREE.Group();
+scene.add(holder, marks, tmp);
+let grid = null, wf = false, gridOn = true, snapOn = true, yUp = false;
+const size = new V3();
+const maxDim = () => Math.max(size.x, size.y, size.z) || 1;
 
 function resize() {
   const w = stage.clientWidth, h = stage.clientHeight;
@@ -108,81 +161,86 @@ function resize() {
   camera.updateProjectionMatrix();
 }
 new ResizeObserver(resize).observe(stage);
-(function loop() { requestAnimationFrame(loop); controls.update(); renderer.render(scene, camera); })();
 
-/* ---------- helpers ---------- */
+const tv = new V3();
+function placeLabels() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  for (const it of items) {
+    tv.copy(it.anchor).project(camera);
+    const vis = tv.z < 1;
+    it.el.style.display = vis ? '' : 'none';
+    if (vis) it.el.style.transform = `translate(${(tv.x * .5 + .5) * w}px,${(-tv.y * .5 + .5) * h}px) translate(-50%,${it.top ? '-130%' : '-50%'})`;
+  }
+}
+(function loop() { requestAnimationFrame(loop); controls.update(); renderer.render(scene, camera); placeLabels(); })();
+
+/* ---------- model ---------- */
 function mat(color) {
-  const m = new THREE.MeshStandardMaterial({
-    color: color || 0x8399b3, metalness: 0.15, roughness: 0.55,
-    side: THREE.DoubleSide, wireframe: wf
-  });
-  mats.push(m);
-  return m;
+  return new THREE.MeshStandardMaterial({ color: color || 0x8399b3, metalness: 0.15, roughness: 0.55, side: THREE.DoubleSide, wireframe: wf });
 }
-
+function setWire(on) {
+  wf = on;
+  holder.traverse(o => { if (o.isMesh) o.material.wireframe = on; });
+}
 function clearModel() {
-  holder.traverse(o => { if (o.geometry) o.geometry.dispose(); });
-  mats.forEach(m => m.dispose());
-  mats = [];
+  holder.traverse(o => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } });
   holder.clear();
+  items.slice().forEach(removeItem);
+  clearTemp();
 }
-
 function fitView() {
-  const d = Math.max(size.x, size.y, size.z) || 1;
-  const dist = d / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) * 1.7;
+  const dist = maxDim() / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) * 1.7;
   camera.position.set(1, 0.7, 1).normalize().multiplyScalar(dist);
-  camera.near = dist / 200;
-  camera.far = dist * 200;
+  camera.near = dist / 200; camera.far = dist * 200;
   camera.updateProjectionMatrix();
   controls.target.set(0, 0, 0);
   controls.update();
 }
+const fmt = n => (+n.toPrecision(5)).toString();
 
-const fmt = n => (+n.toPrecision(4)).toLocaleString();
+let modelInfo = null, prevK = 1;
+function renderModel() {
+  if (!modelInfo) return;
+  const dl = document.createElement('dl');
+  [['File', modelInfo.name], ['Format', modelInfo.fmt], ['Size', modelInfo.dims.map(d => fmt(d * k())).join(' × ') + ' ' + unit()], ['Triangles', modelInfo.tris.toLocaleString()]].forEach(([a, v]) => {
+    const dt = document.createElement('dt'), dd = document.createElement('dd');
+    dt.textContent = a; dd.textContent = v; dl.append(dt, dd);
+  });
+  $('#model').textContent = ''; $('#model').append(dl);
+}
 
 function showModel(obj, name, bytes, ext) {
   clearModel();
-  const yUp = ext === 'obj';
+  yUp = ext === 'obj';
   if (!yUp) obj.rotation.x = -Math.PI / 2;   // CAD files are Z-up
   holder.add(obj);
+  setWire(wf);
   obj.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(obj);
   box.getSize(size);
-  obj.position.sub(box.getCenter(new THREE.Vector3()));
+  obj.position.sub(box.getCenter(new V3()));
+  obj.updateMatrixWorld(true);
 
   let tris = 0;
-  obj.traverse(o => {
-    if (!o.isMesh) return;
-    const g = o.geometry;
-    tris += (g.index ? g.index.count : g.attributes.position.count) / 3;
-  });
+  obj.traverse(o => { if (o.isMesh) { const g = o.geometry; tris += (g.index ? g.index.count : g.attributes.position.count) / 3; } });
   const dims = yUp ? [size.x, size.y, size.z] : [size.x, size.z, size.y];
 
   if (grid) { scene.remove(grid); grid.geometry.dispose(); grid.material.dispose(); }
   grid = new THREE.GridHelper((Math.max(size.x, size.z) * 2.5) || 10, 20, 0x8896a8, 0x8896a8);
-  grid.material.transparent = true;
-  grid.material.opacity = 0.3;
-  grid.position.y = -size.y / 2;
-  grid.visible = gridOn;
+  grid.material.transparent = true; grid.material.opacity = 0.3;
+  grid.position.y = -size.y / 2; grid.visible = gridOn;
   scene.add(grid);
   fitView();
 
-  const info = $('#info');
-  info.textContent = '';
-  const title = document.createElement('b');
-  title.textContent = name;
-  const sub = document.createElement('span');
-  sub.textContent = ext.toUpperCase() + (bytes ? ' · ' + (bytes / 1048576 >= 1 ? (bytes / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(bytes / 1024)) + ' KB') : '');
-  const dl = document.createElement('dl');
-  [['Size', dims.map(fmt).join(' × ')], ['Triangles', Math.round(tris).toLocaleString()]].forEach(([k, v]) => {
-    const dt = document.createElement('dt'), dd = document.createElement('dd');
-    dt.textContent = k; dd.textContent = v; dl.append(dt, dd);
-  });
-  info.append(title, sub, dl);
-  info.hidden = false;
-  $('#bar').hidden = false;
+  const kb = bytes ? ' · ' + (bytes >= 1048576 ? (bytes / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(bytes / 1024)) + ' KB') : '';
+  modelInfo = { name, fmt: ext.toUpperCase() + kb, dims, tris: Math.round(tris) };
+  if (['step', 'stp', 'iges', 'igs'].includes(ext)) $('#funit').value = 'mm';   // STEP/IGES are normally read in mm
+  renderModel();
+  prevK = k();
+  $('#glen').value = fmt(maxDim() * prevK);
   $('#empty').hidden = true;
   showMsg('');
+  setTool('orbit');
 }
 
 /* ---------- parsers ---------- */
@@ -191,7 +249,6 @@ function parseSTL(buf) {
   if (!geo.attributes.normal) geo.computeVertexNormals();
   return new THREE.Mesh(geo, mat());
 }
-
 function parseOBJ(buf) {
   const obj = new THREE.OBJLoader().parse(new TextDecoder().decode(buf));
   let n = 0;
@@ -204,7 +261,6 @@ function parseOBJ(buf) {
   if (!n) throw new Error('No surfaces found in this OBJ file.');
   return obj;
 }
-
 let occtReady;
 function loadOcct() {
   if (!occtReady) occtReady = new Promise((resolve, reject) => {
@@ -216,7 +272,6 @@ function loadOcct() {
   });
   return occtReady;
 }
-
 async function parseCAD(buf, ext) {
   const occt = await loadOcct();
   const data = new Uint8Array(buf);
@@ -234,8 +289,6 @@ async function parseCAD(buf, ext) {
   }
   return group;
 }
-
-/* ---------- open a file ---------- */
 async function openFile(file) {
   const ext = file.name.split('.').pop().toLowerCase();
   if (['catpart', 'catproduct', 'cgr', '3dxml'].includes(ext)) {
@@ -256,28 +309,248 @@ async function openFile(file) {
   }
 }
 
+/* ---------- measuring ---------- */
+let tool = 'orbit', pend = [], items = [];
+const TO_MM = { mm: 1, cm: 10, m: 1000, in: 25.4, ft: 304.8 };
+Object.keys(TO_MM).forEach(u => [['#funit', 'File in '], ['#unit', 'Show ']].forEach(([id, pre]) => {
+  const o = document.createElement('option'); o.value = u; o.textContent = pre + u; $(id).append(o);
+}));
+const unit = () => $('#unit').value;
+const k = () => TO_MM[$('#funit').value] / TO_MM[unit()];   // file units -> display units
+const lineMat = new THREE.LineBasicMaterial({ color: 0xf59e0b, depthTest: false });
+const dotMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b, depthTest: false });
+const fileVec = v => yUp ? v.clone() : new V3(v.x, -v.z, v.y);
+
+const SYMS = [['⏥', 'Flatness'], ['∥', 'Parallelism'], ['⟂', 'Perpendicularity'], ['∠', 'Angularity'], ['⌖', 'Position'],
+  ['◎', 'Concentricity'], ['⌯', 'Symmetry'], ['○', 'Circularity'], ['⌭', 'Cylindricity'], ['⏤', 'Straightness'],
+  ['⌒', 'Profile of a line'], ['⌓', 'Profile of a surface'], ['↗', 'Circular runout'], ['⌰', 'Total runout'], ['D', 'Datum feature']];
+SYMS.forEach(([s, n]) => { const o = document.createElement('option'); o.value = s; o.textContent = (s === 'D' ? '' : s + '  ') + n; $('#gsym').append(o); });
+const symName = s => (SYMS.find(x => x[0] === s) || [, s])[1];
+
+function hint(msg) {
+  let t = msg;
+  if (!t) {
+    const n = pend.length, s = $('#gsym').value;
+    t = !holder.children.length ? 'Open a file to start.'
+      : tool === 'orbit' ? 'Drag to rotate, scroll or pinch to zoom, right-drag to pan.'
+      : tool === 'distance' ? `Distance: tap point ${n + 1} of 2.`
+      : tool === 'angle' ? `Angle: tap point ${n + 1} of 3 (the 2nd is the corner).`
+      : tool === 'radius' ? `Radius: tap 3 points on a round edge (${n + 1} of 3).`
+      : tool === 'face' ? `Face angle: tap face ${n + 1} of 2.`
+      : s === '⏥' ? `Flatness: tap 4 or more points on one face (${n} so far), then Finish.`
+      : '∥⟂∠'.includes(s) ? (n ? 'Now tap the feature face.' : 'Tap the datum face first.')
+      : 'Tap the surface to place the symbol.';
+  }
+  $('#hint').textContent = t;
+}
+
+function sphere(p) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(maxDim() / 140, 12, 8), dotMat);
+  m.position.copy(p); m.renderOrder = 999;
+  return m;
+}
+function line(pts) {
+  const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat);
+  l.renderOrder = 999;
+  return l;
+}
+function clearTemp() { tmp.children.slice().forEach(o => { o.geometry.dispose(); tmp.remove(o); }); }
+function removeItem(it) {
+  marks.remove(it.g);
+  it.g.traverse(o => o.geometry && o.geometry.dispose());
+  it.el.remove();
+  items = items.filter(x => x !== it);
+  renderList();
+}
+function renderList() {
+  const ul = $('#list'); ul.textContent = '';
+  if (!items.length) { const li = document.createElement('li'); li.textContent = 'Nothing measured yet.'; ul.append(li); return; }
+  items.forEach(it => {
+    const li = document.createElement('li'), s = document.createElement('span'), b = document.createElement('button');
+    s.textContent = it.text; b.textContent = '×'; b.setAttribute('aria-label', 'Delete');
+    b.onclick = () => removeItem(it);
+    li.append(s, b); ul.append(li);
+  });
+}
+
+function commit(o) {
+  clearTemp(); pend = [];
+  $('#gfin').hidden = true;
+  const g = new THREE.Group();
+  o.pts.forEach(p => g.add(sphere(p)));
+  (o.lines || []).forEach(l => g.add(line(l)));
+  marks.add(g);
+  const el = document.createElement('div'), f = o.frame, r = o.render && o.render();
+  el.className = 'lab' + (f ? (f.datum ? ' dat' : ' fcf') : '');
+  if (f && f.datum) el.textContent = f.datum;
+  else if (f) {
+    [f.sym, f.tol, ...f.refs].forEach(c => { const s = document.createElement('span'); s.textContent = c; el.append(s); });
+    if (f.verdict !== undefined) { const v = document.createElement('b'); v.className = f.verdict ? 'ok' : 'bad'; v.textContent = (f.verdict ? 'PASS ' : 'FAIL ') + fmt(f.meas); el.append(v); }
+  } else el.textContent = r ? r.label : o.label;
+  $('#labels').append(el);
+  items.push({ g, el, anchor: o.anchor, top: !!f, text: r ? r.text : o.text, render: o.render });
+  renderList();
+  hint(r ? r.text : o.text);
+}
+
+function circle(A, B, C) {
+  const a = A.clone().sub(C), b = B.clone().sub(C), axb = a.clone().cross(b), d = axb.lengthSq();
+  if (d < 1e-12) return null;
+  const c = b.clone().multiplyScalar(a.lengthSq()).sub(a.clone().multiplyScalar(b.lengthSq())).cross(axb).divideScalar(2 * d).add(C);
+  const r = c.distanceTo(A), u = A.clone().sub(c).normalize(), n = axb.normalize(), v = n.clone().cross(u), pts = [];
+  for (let i = 0; i <= 64; i++) { const t = i / 64 * Math.PI * 2; pts.push(c.clone().add(u.clone().multiplyScalar(r * Math.cos(t))).add(v.clone().multiplyScalar(r * Math.sin(t)))); }
+  return { c, r, pts };
+}
+const angleDeg = (u, v) => Math.acos(Math.max(-1, Math.min(1, u.dot(v) / (u.length() * v.length())))) * 180 / Math.PI;
+
+function addPick(P) {
+  pend.push(P);
+  tmp.add(sphere(P.p));
+  const u = unit(), n = pend.length;
+  if (tool === 'distance' && n === 2) {
+    const [a, b] = [pend[0].p, pend[1].p], d = fileVec(b.clone().sub(a)), L = a.distanceTo(b);
+    return commit({ pts: [a, b], lines: [[a, b]], anchor: a.clone().add(b).multiplyScalar(.5), render: () => {
+      const u = unit(), s = k();
+      return { label: fmt(L * s) + ' ' + u, text: `Distance ${fmt(L * s)} ${u} (ΔX ${fmt(d.x * s)}, ΔY ${fmt(d.y * s)}, ΔZ ${fmt(d.z * s)})` };
+    } });
+  }
+  if (tool === 'angle' && n === 3) {
+    const [a, b, c] = pend.map(q => q.p), t = angleDeg(a.clone().sub(b), c.clone().sub(b));
+    return commit({ pts: [a, b, c], lines: [[a, b], [b, c]], anchor: b, label: fmt(t) + '°', text: `Angle ${fmt(t)}°` });
+  }
+  if (tool === 'radius' && n === 3) {
+    const cc = circle(...pend.map(q => q.p));
+    if (!cc) { pend = []; clearTemp(); return hint('Those points are in a straight line. Pick 3 points on a round edge.'); }
+    return commit({ pts: pend.map(q => q.p), lines: [cc.pts], anchor: cc.c, render: () => {
+      const u = unit(), s = k();
+      return { label: `R ${fmt(cc.r * s)} ${u}  Ø ${fmt(cc.r * 2 * s)}`, text: `Radius ${fmt(cc.r * s)} ${u}, diameter ${fmt(cc.r * 2 * s)} ${u}` };
+    } });
+  }
+  if (tool === 'face' && n === 2) {
+    const t = angleDeg(pend[0].n, pend[1].n);
+    return commit({ pts: pend.map(q => q.p), lines: [pend.map(q => q.p)], anchor: pend[1].p, label: fmt(t) + '°',
+      text: `Face angle ${fmt(t)}° (supplementary ${fmt(180 - t)}°)` });
+  }
+  if (tool === 'gdt') return gdtPick(P);
+  hint();
+}
+
+function readG() {
+  const tol = $('#gtol').value.trim();
+  return { s: $('#gsym').value, tol, tv: parseFloat(tol.replace(/[^\d.]/g, '')),
+    refs: $('#gref').value.split(/[\s,]+/).filter(Boolean).map(x => x.toUpperCase()) };
+}
+function gdtPick(P) {
+  const { s, tol, tv, refs } = readG(), u = unit();
+  if (s === 'D') { const L = refs[0] || 'A'; return commit({ pts: [P.p], anchor: P.p, frame: { datum: L }, text: 'Datum feature ' + L }); }
+  if (s === '⏥') { $('#gfin').hidden = pend.length < 4; return hint(); }
+  if ('∥⟂∠'.includes(s)) {
+    if (pend.length < 2) return hint();
+    const [a, b] = pend, th = angleDeg(a.n, b.n), nom = s === '∥' ? 0 : s === '⟂' ? 90 : (parseFloat($('#gnom').value) || 0);
+    const dev = Math.min(Math.abs(th - nom), Math.abs(180 - th - nom)), L = parseFloat($('#glen').value) || maxDim() * k();
+    const m = Math.tan(dev * Math.PI / 180) * L, ok = isNaN(tv) ? undefined : m <= tv;
+    return commit({ pts: [a.p, b.p], lines: [[a.p, b.p]], anchor: b.p, frame: { sym: s, tol, refs, verdict: ok, meas: m },
+      text: `${symName(s)} ${tol} ${refs.join(' ')}: ${fmt(m)} ${u} zone (${fmt(dev)}° off over ${fmt(L)} ${u})${ok === undefined ? '' : ok ? ' PASS' : ' FAIL'}` });
+  }
+  commit({ pts: [P.p], anchor: P.p, frame: { sym: s, tol, refs }, text: `${symName(s)} ${tol} ${refs.join(' ')} (annotation)` });
+}
+$('#gfin').onclick = () => {
+  if (pend.length < 4) return;
+  const { tol, tv, refs } = readG(), n = new V3(), u = unit();
+  pend.forEach(q => n.add(q.n)); n.normalize();
+  const d = pend.map(q => q.p.dot(n)), m = (Math.max(...d) - Math.min(...d)) * k(), ok = isNaN(tv) ? undefined : m <= tv;
+  const pts = pend.map(q => q.p);
+  commit({ pts, anchor: pts[pts.length - 1], frame: { sym: '⏥', tol, refs, verdict: ok, meas: m },
+    text: `Flatness ${tol}: ${fmt(m)} ${u} from ${pts.length} points${ok === undefined ? '' : ok ? ' PASS' : ' FAIL'} (estimate)` });
+};
+
+/* ---------- picking ---------- */
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+function pick(e) {
+  const r = cv.getBoundingClientRect();
+  ndc.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const h = ray.intersectObject(holder, true)[0];
+  if (!h || !h.face) return;
+  let p = h.point.clone();
+  if (snapOn) {
+    const pos = h.object.geometry.attributes.position;
+    let best = maxDim() * 0.03, bp = null;
+    [h.face.a, h.face.b, h.face.c].forEach(i => {
+      const v = new V3().fromBufferAttribute(pos, i).applyMatrix4(h.object.matrixWorld), d = v.distanceTo(p);
+      if (d < best) { best = d; bp = v; }
+    });
+    if (bp) p = bp;
+  }
+  const n = h.face.normal.clone().transformDirection(h.object.matrixWorld);
+  if (n.dot(ray.ray.direction) > 0) n.negate();
+  addPick({ p, n });
+}
+let down = null;
+cv.addEventListener('pointerdown', e => { if (e.isPrimary) down = { x: e.clientX, y: e.clientY }; });
+cv.addEventListener('pointerup', e => {
+  if (!down || !e.isPrimary) return;
+  const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
+  down = null;
+  if (moved < 6 && tool !== 'orbit' && holder.children.length) pick(e);
+});
+
 /* ---------- UI ---------- */
+const mq = matchMedia('(max-width:800px)'), side = $('#side');
+function openPanel(on) { side.classList.toggle('off', !on); $('#ptog').setAttribute('aria-expanded', on); }
+if (mq.matches) openPanel(false);
+$('#ptog').onclick = () => openPanel(side.classList.contains('off'));
+
+function syncG() {
+  const s = $('#gsym').value;
+  document.querySelectorAll('[data-for]').forEach(l => l.hidden = !l.dataset.for.includes(s));
+  $('#gfin').hidden = true; pend = []; clearTemp(); hint();
+}
+$('#gsym').onchange = syncG;
+function setTool(t) {
+  tool = t; pend = []; clearTemp();
+  document.querySelectorAll('[data-tool]').forEach(b => b.setAttribute('aria-pressed', b.dataset.tool === t));
+  $('#gdt').hidden = t !== 'gdt';
+  if (t === 'gdt') { syncG(); if (mq.matches) openPanel(true); } else hint();
+}
+document.querySelectorAll('[data-tool]').forEach(b => b.onclick = () => setTool(b.dataset.tool));
+
 $('#open').onclick = () => $('#file').click();
 $('#file').onchange = e => { const f = e.target.files[0]; if (f) openFile(f); e.target.value = ''; };
 $('#sample').onclick = () => showModel(new THREE.Mesh(new THREE.TorusKnotGeometry(10, 3, 220, 32), mat()), 'Sample torus knot', 0, 'obj');
 $('#reset').onclick = fitView;
-
+$('#clear').onclick = () => { items.slice().forEach(removeItem); pend = []; clearTemp(); hint('Measurements cleared.'); };
+$('#copy').onclick = () => {
+  const t = items.map(i => i.text).join('\n');
+  (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => hint('Copied ' + items.length + ' measurement(s).'), () => hint('Copy is not available in this browser.'));
+};
 function toggle(id, fn) {
   const b = $(id);
   b.onclick = () => { const on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', on); fn(on); };
 }
-toggle('#wire', on => { wf = on; mats.forEach(m => m.wireframe = on); });
+toggle('#wire', setWire);
 toggle('#grid', on => { gridOn = on; if (grid) grid.visible = on; });
 toggle('#spin', on => { controls.autoRotate = on; });
+toggle('#snap', on => { snapOn = on; });
+function unitsChanged() {
+  const s = k(), ratio = s / prevK;
+  prevK = s;
+  const g = parseFloat($('#glen').value);
+  if (g) $('#glen').value = fmt(g * ratio);
+  renderModel();
+  items.forEach(it => { if (it.render) { const o = it.render(); it.text = o.text; it.el.textContent = o.label; } });
+  renderList();
+  hint(`Showing ${unit()} (file is in ${$('#funit').value}). Tolerances are read in ${unit()}.`);
+}
+$('#unit').onchange = $('#funit').onchange = unitsChanged;
 
 ['dragenter', 'dragover'].forEach(t => addEventListener(t, e => { e.preventDefault(); stage.classList.add('drag'); }));
 addEventListener('dragleave', e => { if (!e.relatedTarget) stage.classList.remove('drag'); });
 addEventListener('drop', e => {
-  e.preventDefault();
-  stage.classList.remove('drag');
-  const f = e.dataTransfer.files[0];
-  if (f) openFile(f);
+  e.preventDefault(); stage.classList.remove('drag');
+  const f = e.dataTransfer.files[0]; if (f) openFile(f);
 });
+renderList();
 </script>
 </body>
 </html>
