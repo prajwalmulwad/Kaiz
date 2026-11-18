@@ -68,6 +68,7 @@ li button{border:0;background:none;color:var(--muted);font-size:18px;line-height
 
 <nav class="tools" aria-label="Tools">
   <button class="btn" data-tool="orbit" aria-pressed="true">Orbit</button>
+  <button class="btn" data-tool="feature" aria-pressed="false">Feature</button>
   <button class="btn" data-tool="distance" aria-pressed="false">Distance</button>
   <button class="btn" data-tool="angle" aria-pressed="false">Angle</button>
   <button class="btn" data-tool="radius" aria-pressed="false">Radius</button>
@@ -153,6 +154,7 @@ camera.add(headlight);
 const holder = new THREE.Group(), marks = new THREE.Group(), tmp = new THREE.Group();
 scene.add(holder, marks, tmp);
 let grid = null, wf = false, gridOn = true, snapOn = true, yUp = false;
+let tool = 'orbit', pend = [], items = [], modelInfo = null, prevK = 1;
 const size = new V3();
 const maxDim = () => Math.max(size.x, size.y, size.z) || 1;
 
@@ -201,11 +203,10 @@ function fitView() {
 }
 const fmt = n => (+n.toPrecision(5)).toString();
 
-let modelInfo = null, prevK = 1;
 function renderModel() {
   if (!modelInfo) return;
   const dl = document.createElement('dl');
-  [['File', modelInfo.name], ['Format', modelInfo.fmt], ['Size', modelInfo.dims.map(d => fmt(d * k())).join(' × ') + ' ' + unit()], ['Triangles', modelInfo.tris.toLocaleString()]].forEach(([a, v]) => {
+  [['File', modelInfo.name], ['Format', modelInfo.fmt], ['Size', modelInfo.dims.map(d => fmt(d * k())).join(' × ') + ' ' + unit()], ['Surface area', fmt(modelInfo.surf * k() * k()) + ' ' + unit() + '²'], ['Volume (closed)', fmt(modelInfo.vol * k() * k() * k()) + ' ' + unit() + '³'], ['Triangles', modelInfo.tris.toLocaleString()]].forEach(([a, v]) => {
     const dt = document.createElement('dt'), dd = document.createElement('dd');
     dt.textContent = a; dd.textContent = v; dl.append(dt, dd);
   });
@@ -224,8 +225,20 @@ function showModel(obj, name, bytes, ext) {
   obj.position.sub(box.getCenter(new V3()));
   obj.updateMatrixWorld(true);
 
-  let tris = 0;
-  obj.traverse(o => { if (o.isMesh) { const g = o.geometry; tris += (g.index ? g.index.count : g.attributes.position.count) / 3; } });
+  let tris = 0, surf = 0, vol = 0;
+  const pa = new V3(), pb = new V3(), pc = new V3(), t1 = new V3(), t2 = new V3();
+  obj.traverse(o => {
+    if (!o.isMesh) return;
+    const g = o.geometry, pos = g.attributes.position, ix = g.index, nt = (ix ? ix.count : pos.count) / 3;
+    tris += nt;
+    for (let t = 0; t < nt; t++) {
+      pa.fromBufferAttribute(pos, ix ? ix.getX(3 * t) : 3 * t);
+      pb.fromBufferAttribute(pos, ix ? ix.getX(3 * t + 1) : 3 * t + 1);
+      pc.fromBufferAttribute(pos, ix ? ix.getX(3 * t + 2) : 3 * t + 2);
+      surf += t1.subVectors(pb, pa).cross(t2.subVectors(pc, pa)).length() / 2;
+      vol += pa.dot(t1.crossVectors(pb, pc)) / 6;
+    }
+  });
   const dims = yUp ? [size.x, size.y, size.z] : [size.x, size.z, size.y];
 
   if (grid) { scene.remove(grid); grid.geometry.dispose(); grid.material.dispose(); }
@@ -236,7 +249,7 @@ function showModel(obj, name, bytes, ext) {
   fitView();
 
   const kb = bytes ? ' · ' + (bytes >= 1048576 ? (bytes / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(bytes / 1024)) + ' KB') : '';
-  modelInfo = { name, fmt: ext.toUpperCase() + kb, dims, tris: Math.round(tris) };
+  modelInfo = { name, fmt: ext.toUpperCase() + kb, dims, tris: Math.round(tris), surf, vol: Math.abs(vol) };
   if (['step', 'stp', 'iges', 'igs'].includes(ext)) $('#funit').value = 'mm';   // STEP/IGES are normally read in mm
   renderModel();
   prevK = k();
@@ -288,7 +301,9 @@ async function parseCAD(buf, ext) {
     g.setIndex(new THREE.Uint32BufferAttribute(m.index.array, 1));
     if (!m.attributes.normal) g.computeVertexNormals();
     const c = m.color ? new THREE.Color(m.color[0], m.color[1], m.color[2]) : null;
-    group.add(new THREE.Mesh(g, mat(c)));
+    const mesh = new THREE.Mesh(g, mat(c));
+    if (m.brep_faces) mesh.userData.faces = m.brep_faces;
+    group.add(mesh);
   }
   return group;
 }
@@ -317,7 +332,6 @@ async function openFile(file) {
 }
 
 /* ---------- measuring ---------- */
-let tool = 'orbit', pend = [], items = [];
 const TO_MM = { mm: 1, cm: 10, m: 1000, in: 25.4, ft: 304.8 };
 Object.keys(TO_MM).forEach(u => [['#funit', 'File in '], ['#unit', 'Show ']].forEach(([id, pre]) => {
   const o = document.createElement('option'); o.value = u; o.textContent = pre + u; $(id).append(o);
@@ -340,6 +354,7 @@ function hint(msg) {
     const n = pend.length, s = $('#gsym').value;
     t = !holder.children.length ? 'Open a file to start.'
       : tool === 'orbit' ? 'Drag to rotate, scroll or pinch to zoom, right-drag to pan.'
+      : tool === 'feature' ? 'Feature: tap a face or hole to measure it.'
       : tool === 'distance' ? `Distance: tap point ${n + 1} of 2.`
       : tool === 'angle' ? `Angle: tap point ${n + 1} of 3 (the 2nd is the corner).`
       : tool === 'radius' ? `Radius: tap 3 points on a round edge (${n + 1} of 3).`
@@ -373,189 +388,4 @@ function renderList() {
   const ul = $('#list'); ul.textContent = '';
   if (!items.length) { const li = document.createElement('li'); li.textContent = 'Nothing measured yet.'; ul.append(li); return; }
   items.forEach(it => {
-    const li = document.createElement('li'), s = document.createElement('span'), b = document.createElement('button');
-    s.textContent = it.text; b.textContent = '×'; b.setAttribute('aria-label', 'Delete');
-    b.onclick = () => removeItem(it);
-    li.append(s, b); ul.append(li);
-  });
-}
-
-function commit(o) {
-  clearTemp(); pend = [];
-  $('#gfin').hidden = true;
-  const g = new THREE.Group();
-  o.pts.forEach(p => g.add(sphere(p)));
-  (o.lines || []).forEach(l => g.add(line(l)));
-  marks.add(g);
-  const el = document.createElement('div'), f = o.frame, r = o.render && o.render();
-  el.className = 'lab' + (f ? (f.datum ? ' dat' : ' fcf') : '');
-  if (f && f.datum) el.textContent = f.datum;
-  else if (f) {
-    [f.sym, f.tol, ...f.refs].forEach(c => { const s = document.createElement('span'); s.textContent = c; el.append(s); });
-    if (f.verdict !== undefined) { const v = document.createElement('b'); v.className = f.verdict ? 'ok' : 'bad'; v.textContent = (f.verdict ? 'PASS ' : 'FAIL ') + fmt(f.meas); el.append(v); }
-  } else el.textContent = r ? r.label : o.label;
-  $('#labels').append(el);
-  items.push({ g, el, anchor: o.anchor, top: !!f, text: r ? r.text : o.text, render: o.render });
-  renderList();
-  hint(r ? r.text : o.text);
-}
-
-function circle(A, B, C) {
-  const a = A.clone().sub(C), b = B.clone().sub(C), axb = a.clone().cross(b), d = axb.lengthSq();
-  if (d < 1e-12) return null;
-  const c = b.clone().multiplyScalar(a.lengthSq()).sub(a.clone().multiplyScalar(b.lengthSq())).cross(axb).divideScalar(2 * d).add(C);
-  const r = c.distanceTo(A), u = A.clone().sub(c).normalize(), n = axb.normalize(), v = n.clone().cross(u), pts = [];
-  for (let i = 0; i <= 64; i++) { const t = i / 64 * Math.PI * 2; pts.push(c.clone().add(u.clone().multiplyScalar(r * Math.cos(t))).add(v.clone().multiplyScalar(r * Math.sin(t)))); }
-  return { c, r, pts };
-}
-const angleDeg = (u, v) => Math.acos(Math.max(-1, Math.min(1, u.dot(v) / (u.length() * v.length())))) * 180 / Math.PI;
-
-function addPick(P) {
-  pend.push(P);
-  tmp.add(sphere(P.p));
-  const u = unit(), n = pend.length;
-  if (tool === 'distance' && n === 2) {
-    const [a, b] = [pend[0].p, pend[1].p], d = fileVec(b.clone().sub(a)), L = a.distanceTo(b);
-    return commit({ pts: [a, b], lines: [[a, b]], anchor: a.clone().add(b).multiplyScalar(.5), render: () => {
-      const u = unit(), s = k();
-      return { label: fmt(L * s) + ' ' + u, text: `Distance ${fmt(L * s)} ${u} (ΔX ${fmt(d.x * s)}, ΔY ${fmt(d.y * s)}, ΔZ ${fmt(d.z * s)})` };
-    } });
-  }
-  if (tool === 'angle' && n === 3) {
-    const [a, b, c] = pend.map(q => q.p), t = angleDeg(a.clone().sub(b), c.clone().sub(b));
-    return commit({ pts: [a, b, c], lines: [[a, b], [b, c]], anchor: b, label: fmt(t) + '°', text: `Angle ${fmt(t)}°` });
-  }
-  if (tool === 'radius' && n === 3) {
-    const cc = circle(...pend.map(q => q.p));
-    if (!cc) { pend = []; clearTemp(); return hint('Those points are in a straight line. Pick 3 points on a round edge.'); }
-    return commit({ pts: pend.map(q => q.p), lines: [cc.pts], anchor: cc.c, render: () => {
-      const u = unit(), s = k();
-      return { label: `R ${fmt(cc.r * s)} ${u}  Ø ${fmt(cc.r * 2 * s)}`, text: `Radius ${fmt(cc.r * s)} ${u}, diameter ${fmt(cc.r * 2 * s)} ${u}` };
-    } });
-  }
-  if (tool === 'face' && n === 2) {
-    const t = angleDeg(pend[0].n, pend[1].n);
-    return commit({ pts: pend.map(q => q.p), lines: [pend.map(q => q.p)], anchor: pend[1].p, label: fmt(t) + '°',
-      text: `Face angle ${fmt(t)}° (supplementary ${fmt(180 - t)}°)` });
-  }
-  if (tool === 'gdt') return gdtPick(P);
-  hint();
-}
-
-function readG() {
-  const tol = $('#gtol').value.trim();
-  return { s: $('#gsym').value, tol, tv: parseFloat(tol.replace(/[^\d.]/g, '')),
-    refs: $('#gref').value.split(/[\s,]+/).filter(Boolean).map(x => x.toUpperCase()) };
-}
-function gdtPick(P) {
-  const { s, tol, tv, refs } = readG(), u = unit();
-  if (s === 'D') { const L = refs[0] || 'A'; return commit({ pts: [P.p], anchor: P.p, frame: { datum: L }, text: 'Datum feature ' + L }); }
-  if (s === '⏥') { $('#gfin').hidden = pend.length < 4; return hint(); }
-  if ('∥⟂∠'.includes(s)) {
-    if (pend.length < 2) return hint();
-    const [a, b] = pend, th = angleDeg(a.n, b.n), nom = s === '∥' ? 0 : s === '⟂' ? 90 : (parseFloat($('#gnom').value) || 0);
-    const dev = Math.min(Math.abs(th - nom), Math.abs(180 - th - nom)), L = parseFloat($('#glen').value) || maxDim() * k();
-    const m = Math.tan(dev * Math.PI / 180) * L, ok = isNaN(tv) ? undefined : m <= tv;
-    return commit({ pts: [a.p, b.p], lines: [[a.p, b.p]], anchor: b.p, frame: { sym: s, tol, refs, verdict: ok, meas: m },
-      text: `${symName(s)} ${tol} ${refs.join(' ')}: ${fmt(m)} ${u} zone (${fmt(dev)}° off over ${fmt(L)} ${u})${ok === undefined ? '' : ok ? ' PASS' : ' FAIL'}` });
-  }
-  commit({ pts: [P.p], anchor: P.p, frame: { sym: s, tol, refs }, text: `${symName(s)} ${tol} ${refs.join(' ')} (annotation)` });
-}
-$('#gfin').onclick = () => {
-  if (pend.length < 4) return;
-  const { tol, tv, refs } = readG(), n = new V3(), u = unit();
-  pend.forEach(q => n.add(q.n)); n.normalize();
-  const d = pend.map(q => q.p.dot(n)), m = (Math.max(...d) - Math.min(...d)) * k(), ok = isNaN(tv) ? undefined : m <= tv;
-  const pts = pend.map(q => q.p);
-  commit({ pts, anchor: pts[pts.length - 1], frame: { sym: '⏥', tol, refs, verdict: ok, meas: m },
-    text: `Flatness ${tol}: ${fmt(m)} ${u} from ${pts.length} points${ok === undefined ? '' : ok ? ' PASS' : ' FAIL'} (estimate)` });
-};
-
-/* ---------- picking ---------- */
-const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
-function pick(e) {
-  const r = cv.getBoundingClientRect();
-  ndc.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1);
-  ray.setFromCamera(ndc, camera);
-  const h = ray.intersectObject(holder, true)[0];
-  if (!h || !h.face) return;
-  let p = h.point.clone();
-  if (snapOn) {
-    const pos = h.object.geometry.attributes.position;
-    let best = maxDim() * 0.03, bp = null;
-    [h.face.a, h.face.b, h.face.c].forEach(i => {
-      const v = new V3().fromBufferAttribute(pos, i).applyMatrix4(h.object.matrixWorld), d = v.distanceTo(p);
-      if (d < best) { best = d; bp = v; }
-    });
-    if (bp) p = bp;
-  }
-  const n = h.face.normal.clone().transformDirection(h.object.matrixWorld);
-  if (n.dot(ray.ray.direction) > 0) n.negate();
-  addPick({ p, n });
-}
-let down = null;
-cv.addEventListener('pointerdown', e => { if (e.isPrimary) down = { x: e.clientX, y: e.clientY }; });
-cv.addEventListener('pointerup', e => {
-  if (!down || !e.isPrimary) return;
-  const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
-  down = null;
-  if (moved < 6 && tool !== 'orbit' && holder.children.length) pick(e);
-});
-
-/* ---------- UI ---------- */
-const mq = matchMedia('(max-width:800px)'), side = $('#side');
-function openPanel(on) { side.classList.toggle('off', !on); $('#ptog').setAttribute('aria-expanded', on); }
-if (mq.matches) openPanel(false);
-$('#ptog').onclick = () => openPanel(side.classList.contains('off'));
-
-function syncG() {
-  const s = $('#gsym').value;
-  document.querySelectorAll('[data-for]').forEach(l => l.hidden = !l.dataset.for.includes(s));
-  $('#gfin').hidden = true; pend = []; clearTemp(); hint();
-}
-$('#gsym').onchange = syncG;
-function setTool(t) {
-  tool = t; pend = []; clearTemp();
-  document.querySelectorAll('[data-tool]').forEach(b => b.setAttribute('aria-pressed', b.dataset.tool === t));
-  $('#gdt').hidden = t !== 'gdt';
-  if (t === 'gdt') { syncG(); if (mq.matches) openPanel(true); } else hint();
-}
-document.querySelectorAll('[data-tool]').forEach(b => b.onclick = () => setTool(b.dataset.tool));
-
-$('#sample').onclick = () => showModel(new THREE.Mesh(new THREE.TorusKnotGeometry(10, 3, 220, 32), mat()), 'Sample torus knot', 0, 'obj');
-$('#reset').onclick = fitView;
-$('#clear').onclick = () => { items.slice().forEach(removeItem); pend = []; clearTemp(); hint('Measurements cleared.'); };
-$('#copy').onclick = () => {
-  const t = items.map(i => i.text).join('\n');
-  (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => hint('Copied ' + items.length + ' measurement(s).'), () => hint('Copy is not available in this browser.'));
-};
-function toggle(id, fn) {
-  const b = $(id);
-  b.onclick = () => { const on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', on); fn(on); };
-}
-toggle('#wire', setWire);
-toggle('#grid', on => { gridOn = on; if (grid) grid.visible = on; });
-toggle('#spin', on => { controls.autoRotate = on; });
-toggle('#snap', on => { snapOn = on; });
-function unitsChanged() {
-  const s = k(), ratio = s / prevK;
-  prevK = s;
-  const g = parseFloat($('#glen').value);
-  if (g) $('#glen').value = fmt(g * ratio);
-  renderModel();
-  items.forEach(it => { if (it.render) { const o = it.render(); it.text = o.text; it.el.textContent = o.label; } });
-  renderList();
-  hint(`Showing ${unit()} (file is in ${$('#funit').value}). Tolerances are read in ${unit()}.`);
-}
-$('#unit').onchange = $('#funit').onchange = unitsChanged;
-
-['dragenter', 'dragover'].forEach(t => addEventListener(t, e => { e.preventDefault(); stage.classList.add('drag'); }));
-addEventListener('dragleave', e => { if (!e.relatedTarget) stage.classList.remove('drag'); });
-addEventListener('drop', e => {
-  e.preventDefault(); stage.classList.remove('drag');
-  const f = e.dataTransfer.files[0]; if (f) openFile(f);
-});
-renderList();
-</script>
-</body>
-</html>
+    const li = document.createElement('li'), s = document.createElement('span'), b = document.createE
